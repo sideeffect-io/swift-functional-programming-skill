@@ -21,6 +21,10 @@ and effects as data.
 This repository already matches the agent skills folder layout (a skills folder
 with a required `SKILL.md` and optional supporting folders).
 
+### NPX
+
+`npx skills add sideeffect-io/swift-functional-programming-skill`
+
 ### Codex (CLI or IDE)
 
 Codex can load skills from either a per-user directory or a repo-local
