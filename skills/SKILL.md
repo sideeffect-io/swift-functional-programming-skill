@@ -1,73 +1,125 @@
 ---
 name: functional-programming-developer
-description: Functional architecture guidance for Swift (immutability, pure functions, reducers, DI via functions).
+description: Functional architecture guidance for Swift 6.2+ with strict concurrency, layering, reducers, state machines, dependency injection, domain modeling, algebraic data types, effects as data, immutability, and testability.
 ---
 
 # Functional Architecture in Swift
 
-Functional programming first, object-oriented / protocol-oriented programming second.
-
-This skill guides how to design **domain and core logic** in Swift using
-immutability, pure functions, and explicit effects.
-
----
+Use this skill for Swift architecture work where correctness, decoupling, and testability matter more than framework ceremony.
 
 ## When to use
 
-- Domain modeling
-- Feature / business logic
-- Reducers and workflows
-- Dependency-injected use cases
-- Highly testable code
+- Domain modeling and workflow design
+- Reducers, state machines, and orchestration layers
+- Layering, boundaries, and dependency direction
+- Dependency injection and composition roots
+- Strict concurrency architecture in Swift 6.2+
+- Refactors that should improve testability without adding abstraction noise
 
----
+## North star
 
-## Architectural patterns
+Partition the codebase into five concerns:
 
-- Functional Core / Imperative Shell
-- Feature-oriented design
-- Dependency injection via functions
-- Mealy & extended state machines
-- Effects as data
+1. Inert domain
+2. Pure decision logic
+3. Application orchestration and feature-state management
+4. Composition boundary
+5. Infrastructure
 
----
+Keep the first two fully deterministic. Push side effects, storage, networking, timers, and hardware access to the last two.
 
-## Functional techniques
+## Functional orientation
 
-- Algebraic Data Types (enum + struct)
-- Functional operators (map, flatMap, reduce)
-- Partial application & currying
-- Optics (Lenses & Prisms with KeyPaths)
+This is a functional-programming-oriented architecture skill, not a generic layered-architecture guide.
 
----
+- Prefer immutable values, algebraic data types, exhaustive pattern matching, and pure transformations.
+- Keep decision logic referentially transparent whenever possible.
+- Describe effects as data and interpret them at the boundary.
+- Borrow heavily from pure-functional architecture style, while staying idiomatic in Swift's type system and concurrency model.
 
-## Reading order
+## Layer and communication rules
 
-1. references/state-machines.md
-2. references/functional-operators.md
-3. references/algebraic-data-types.md
-4. references/optics.md
-5. references/dependency-injection-currying.md
-6. references/dependency-injection-decision-table.md
+- Domain types are immutable `struct` and `enum` values by default.
+- Pure decision logic is synchronous whenever possible and returns data, not side effects.
+- Reducers remain pure: `(State, Event) -> Transition<State, Effect>`.
+- Feature-state management is a role, not a mandatory type. It may be a store, a directly consumed state machine, or another thin orchestration shell.
+- If you use stores, they orchestrate tasks and observation, but they do not create peer stores implicitly.
+- Repositories own authoritative state and cross-aggregate orchestration when a source of truth must stay coherent.
+- Factories and bootstrap code own wiring. They assemble concrete dependencies and feature graphs.
+- Inward layers depend on capabilities, not concrete implementations.
+- Prefer composition over inheritance. Inheritance is a framework constraint, not an architecture default.
 
----
+## Strict concurrency defaults
 
-## Dependency injection rules
+- Assume Swift 6.2+ with strict concurrency in mind.
+- Mark boundary values and dependency closures `Sendable` when that is semantically correct.
+- Use `@concurrent` sparingly, only for effect executors that must intentionally leave caller isolation and run concurrently with the caller.
+- If an async helper should stay on the caller's actor, rely on `NonisolatedNonsendingByDefault` when enabled; otherwise spell `nonisolated(nonsending)` explicitly in reusable examples.
+- Prefer pure or `nonisolated` helpers over actor-isolated helpers when no isolated mutable state is needed.
+- Use actors for true serialization boundaries only: shared mutable caches, authoritative repositories, or coordination points with identity and lifecycle.
 
-- Closures first
-- Capability structs second
-- Protocols last (boundary only)
+## Decision table
 
----
+| Need | Default choice |
+|---|---|
+| Pure business rule | Free or namespaced pure function |
+| Pure state transition | Reducer or state machine transition |
+| One async effect that must intentionally run off the caller actor | `@concurrent` function returning an event or result |
+| A few dependencies | Individual closure parameters |
+| A related group of dependencies | `Sendable` capability struct |
+| Runtime polymorphism or external integration seam | Protocol at the outer boundary |
+| Shared mutable state | Actor or repository, not a default worker actor |
 
-## Testing rules
+## Anti-patterns
 
-- Unit tests only in the core
-- Fake closures instead of mocks
-- No sleeps or timers
+- Side effects in reducers or domain value initializers
+- Hidden feature-state managers created inside other feature-state managers
+- Parallel APIs for the "fast path" and the "real path" instead of modeling both inside one orchestrator
+- Effect builders that hide lifecycle or cancellation policy outside the workflow model
+- Protocol per concrete type when a closure or capability struct would do
+- An actor per feature by default
+- Repositories that leak raw infrastructure details upward
+- Multiple booleans that describe mutually exclusive workflow states
 
----
+## Reference map
 
-## Summary
+Load only the files needed for the task.
 
-If it’s hard to test, simplify the design.
+- `references/layers-and-boundaries.md`
+  - Start here for the architecture map and dependency direction rules.
+- `references/new-feature-playbook.md`
+  - Read when implementing a feature end-to-end and you need a whole-feature workflow, not just isolated architecture rules.
+- `references/state-management-repository-factory-boundaries.md`
+  - Read when responsibilities are drifting between feature-state management, source of truth, and composition.
+- `references/solid-in-functional-swift.md`
+  - Read when discussing SOLID, composition over inheritance, and abstraction quality.
+- `references/domain-modeling.md`
+  - Read for immutable modeling, ADTs, invariants, derived state, and source-of-truth rules.
+- `references/dependency-injection.md`
+  - Read for closures-first DI, capability structs, protocol boundaries, and composition-root assembly.
+- `references/strict-concurrency-boundaries.md`
+  - Read for `Sendable`, `@concurrent`, `nonisolated`, and Swift 6.2 execution semantics.
+- `references/state-machines.md`
+  - Read for reducer-driven workflows, effect execution, lifecycle modeling, and parent-child coordination.
+- `references/testability.md`
+  - Read for testing seams by layer and how strict concurrency affects test design.
+- For broader FP grounding that still applies directly to Swift architecture:
+- `references/algebraic-data-types-and-totality.md`
+  - Optional. Read for product and sum types, illegal-state elimination, exhaustive matching, and total-function thinking.
+- `references/function-composition.md`
+  - Optional. Read for higher-order functions, composition, partial application, and when to extract pure helpers.
+- `references/effects-as-data.md`
+  - Optional. Read for describing side effects as values plus interpreters at the boundary.
+- `references/validation-and-error-modeling.md`
+  - Optional. Read for `Optional` and `Result` pipelines, fail-fast validation, and domain errors.
+- `references/functional-operators.md`
+  - Optional. Read for lightweight operator guidance in pure transformations.
+- `references/optics.md`
+  - Optional. Read when immutable nested updates are getting noisy.
+
+## Practical heuristics
+
+- Prefer enums as namespaces for related pure functions when a type carries no state.
+- Keep functions small enough that their contract is obvious without scrolling.
+- Keep files cohesive; split by responsibility rather than by arbitrary suffixes.
+- If a unit is hard to test, the design probably mixes boundaries that should be separate.

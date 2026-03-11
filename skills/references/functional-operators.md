@@ -1,171 +1,65 @@
-# Functional Operators in Swift (map, flatMap, reduce, ...)
+# Functional Operators
 
-Swift’s standard library gives you a great functional vocabulary. The key is to use operators
-to make **control flow explicit** and code **composable**.
+Use operators to keep pure transformations concise, not to hide intent.
 
-This document focuses on:
-- `map` / `flatMap` / `compactMap` / `filter`
-- `reduce` / `reduce(into:)`
-- using these operators with `Optional` and `Result`
-- practical readability guidelines
+## Defaults
 
----
+- `map` transforms a value while preserving the container.
+- `flatMap` chains operations that already return a container.
+- `compactMap` transforms and drops missing values.
+- `reduce(into:)` is the default fold when building collections.
+- Keep transformations referentially transparent in the pure core.
 
-## A mental model
-
-Think “container” (Array/Optional/Result) + “value”.
-
-- `map`: transform the value, keep the container
-- `flatMap`: transform the value into a container, then flatten
-- `reduce`: fold many values into one
-
----
-
-## 1) map
-
-### Arrays
+## Examples
 
 ```swift
-let names = people.map { $0.name }
-```
+import Foundation
 
-### Optionals
+// Given:
+// let people: [Person]
+// let rawInput: String?
+// let events: [Event]
+// let initialState: State
+// func reduce(_ state: State, _ event: Event) -> Transition<State, Effect>
 
-```swift
-let maybeUser: User? = ...
-let maybeName: String? = maybeUser.map { $0.name }
-```
+let names = people.map(\.name)
 
-### Result
-
-```swift
-enum ParseError: Error { case invalid }
-
-func parseInt(_ s: String) -> Result<Int, ParseError> {
-    Int(s).map(Result.success) ?? .failure(.invalid)
-}
-
-let doubled = parseInt("21").map { $0 * 2 } // success(42)
-```
-
-**Rule of thumb:** `map` should be side-effect free. If you’re doing I/O inside `map`, pause.
-
----
-
-## 2) flatMap
-
-### Optional: chaining validations
-
-```swift
-func nonEmpty(_ s: String) -> String? { s.isEmpty ? nil : s }
-func maxLen(_ n: Int) -> (String) -> String? { { $0.count <= n ? $0 : nil } }
-
-let input: String? = " hello "
-let validated = input
+let validated = rawInput
     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    .flatMap(nonEmpty)
-    .flatMap(maxLen(10))
-```
+    .flatMap { $0.isEmpty ? nil : $0 }
 
-This reads as a pipeline: trim → require non-empty → require <=10.
-
-### Array: one-to-many
-
-```swift
-let lines = ["a b", "c"]
-let words = lines.flatMap { $0.split(separator: " ").map(String.init) }
-// ["a", "b", "c"]
-```
-
-### Result: chaining computations that may fail
-
-```swift
-enum DomainError: Error { case notANumber, divisionByZero }
-
-func parse(_ s: String) -> Result<Int, DomainError> {
-    Int(s).map(Result.success) ?? .failure(.notANumber)
+enum ParseFailure: Error {
+    case invalid
 }
 
-func reciprocal(_ x: Int) -> Result<Double, DomainError> {
-    x == 0 ? .failure(.divisionByZero) : .success(1.0 / Double(x))
+let parsed = Result<Int, ParseFailure>.success(21)
+    .map { $0 * 2 }
+
+let byID = people.reduce(into: [UUID: Person]()) { partialResult, person in
+    partialResult[person.id] = person
 }
 
-let r = parse("4").flatMap(reciprocal) // success(0.25)
-```
-
----
-
-## 3) compactMap
-
-Transforms and drops nils:
-
-```swift
-let ids = ["A", "", "B"].compactMap { $0.isEmpty ? nil : $0 }
-// ["A", "B"]
-```
-
-Common: parsing:
-
-```swift
-let uuids = raw.compactMap(UUID.init(uuidString:))
-```
-
----
-
-## 4) filter
-
-Keeps items matching a predicate:
-
-```swift
-let adults = people.filter { $0.age >= 18 }
-```
-
----
-
-## 5) reduce and reduce(into:)
-
-### reduce: fold into a value
-
-```swift
-let total = prices.reduce(0, +)
-```
-
-### reduce(into:): fold with a mutable accumulator (inside the function)
-
-This is still “functional enough” because mutation is local.
-
-```swift
-let byId = people.reduce(into: [String: Person]()) { dict, p in
-    dict[p.id] = p
-}
-```
-
-### Reduce as “event replay” (state machines)
-
-Reducers make this extremely powerful:
-
-```swift
 let finalState = events.reduce(initialState) { state, event in
     reduce(state, event).state
 }
 ```
 
----
+## Readability rules
 
-## 6) Practical readability tips
+- Keep pipelines short.
+- Extract named helpers when closures stop being obvious.
+- Do not hide side effects inside `map` or `flatMap`.
+- Prefer `reduce(into:)` over manual loops when building dictionaries or sets.
+- Use `Result` and `Optional` transformations to keep validation pipelines explicit.
 
-- Prefer **named helper functions** when closures get long.
-- Use `flatMap` only when the closure returns a container (`Optional`, `Result`, arrays, etc.).
-- Use `reduce(into:)` when you are building dictionaries/sets to keep it efficient and readable.
-- Keep pipelines short; if it grows beyond 4–6 steps, consider extracting a dedicated function.
+## Good use cases
 
----
+- value normalization
+- projection from domain to derived state
+- replaying events through a pure reducer
+- fail-fast validation pipelines over `Optional` or `Result`
 
-## 7) “effects live at the boundary”
+## Bad use cases
 
-Inside the functional core:
-- use `map/flatMap/reduce` to transform values
-- do not start network requests, DB writes, logs, etc.
-
-At the shell:
-- use `forEach` (or plain loops) to interpret effects.
+- starting tasks or IO inside transformations
+- long chains that mix validation, branching, and side effects

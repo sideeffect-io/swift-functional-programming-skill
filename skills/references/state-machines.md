@@ -1,599 +1,277 @@
-# Mealy & Extended State Machines in Swift
-## Reducers, Effects, and AsyncSequence-based State Streams
+# State Machines
 
-A state machine can be viewed not only as a pure transition function, but also as a
-**stream of states evolving over time**.
+Use a state machine when the workflow, not the view hierarchy, is the hard part.
 
-This document extends the reducer-based approach with **AsyncSequence** examples,
-showing how to model a state machine as a stream of states and effects.
+The state machine can either sit behind a store-like shell or be the feature-state layer itself if the view can consume its state stream directly.
 
----
+## When a reducer is enough
 
-## 1) Recap: reducer as a Mealy machine
+Use a plain reducer when:
 
-A reducer models behavior as:
+- there are only a few stable states
+- effects are simple and independent
+- cancellation and supervision rules are minimal
 
-```
-(State, Event) -> (State, [Effect])
-```
+## When to use an extended Mealy machine
 
-```swift
-struct Transition<State, Effect> {
-    let state: State
-    let effects: [Effect]
-}
+Use a state machine when:
 
-typealias Reducer<State, Event, Effect> =
-    (State, Event) -> Transition<State, Effect>
-```
+- transitions depend on both mode and context
+- effects feed results back into the workflow
+- lifecycle, cancellation, retries, or parallel flows must be explicit
+- you need to prove where orchestration logic lives
 
-This function is **pure** and synchronous.
-
----
-
-## 2) From reducer to stream of states
-
-Conceptually:
-
-> **A state machine is a stream of states produced by a stream of events.**
-
-```
-EventStream ──► Reducer ──► StateStream
-```
-
-In Swift Concurrency, this maps naturally to `AsyncSequence`.
-
----
-
-## 3) Example domain: Counter
+The canonical shape is:
 
 ```swift
-struct CounterState: Equatable {
-    let value: Int
-}
-
-enum CounterEvent: Equatable {
-    case increment
-    case decrement
-}
-
-enum CounterEffect: Equatable {
-    case log(String)
-}
+(State, Event) -> Transition<State, Effect>
 ```
 
-Reducer:
+Where `Transition` is pure data:
 
 ```swift
-let counterReduce: Reducer<CounterState, CounterEvent, CounterEffect> = { state, event in
-    switch event {
-    case .increment:
-        let next = CounterState(value: state.value + 1)
-        return .init(state: next, effects: [.log("inc")])
+import Foundation
 
-    case .decrement:
-        let next = CounterState(value: state.value - 1)
-        return .init(state: next, effects: [.log("dec")])
-    }
-}
-```
-
----
-
-## 4) Async event source
-
-Events often come from:
-- user input
-- network callbacks
-- timers
-- child effect completions
-
-A simple async event stream can be built with `AsyncStream`.
-
-```swift
-func counterEvents() -> AsyncStream<CounterEvent> {
-    AsyncStream { continuation in
-        continuation.yield(.increment)
-        continuation.yield(.increment)
-        continuation.yield(.decrement)
-        continuation.finish()
-    }
-}
-```
-
----
-
-## 5) Folding an AsyncSequence into a State stream
-
-We now want to turn:
-
-```
-AsyncSequence<Event> → AsyncSequence<State>
-```
-
-### Basic runner (state-only)
-
-```swift
-func states<State, Event, Effect>(
-    initial: State,
-    events: some AsyncSequence<Event, Never>,
-    reduce: @escaping Reducer<State, Event, Effect>
-) -> AsyncStream<State> {
-
-    AsyncStream { continuation in
-        Task {
-            var state = initial
-            continuation.yield(state) // initial state
-
-            for await event in events {
-                let transition = reduce(state, event)
-                state = transition.state
-                continuation.yield(state)
-            }
-
-            continuation.finish()
-        }
-    }
-}
-```
-
-Usage:
-
-```swift
-let stateStream = states(
-    initial: CounterState(value: 0),
-    events: counterEvents(),
-    reduce: counterReduce
-)
-
-for await state in stateStream {
-    print("state =", state.value)
-}
-```
-
-This prints:
-
-```
-state = 0
-state = 1
-state = 2
-state = 1
-```
-
----
-
-## 6) Streaming both states and effects
-
-Often you want both:
-- a stream of states (for UI)
-- a stream of effects (for side effects)
-
-### Model output as a value
-
-```swift
-struct Step<State, Effect> {
+struct Transition<State: Sendable, Effect: Sendable>: Sendable {
     let state: State
     let effects: [Effect]
 }
 ```
 
-### Async stream of steps
+## Core example
 
 ```swift
-func steps<State, Event, Effect>(
-    initial: State,
-    events: some AsyncSequence<Event, Never>,
-    reduce: @escaping Reducer<State, Event, Effect>
-) -> AsyncStream<Step<State, Effect>> {
+import Foundation
 
-    AsyncStream { continuation in
-        Task {
-            var state = initial
-            continuation.yield(.init(state: state, effects: []))
+struct Credentials: Sendable, Equatable {
+    let username: String
+    let password: String
+}
 
-            for await event in events {
-                let transition = reduce(state, event)
-                state = transition.state
-                continuation.yield(.init(state: state, effects: transition.effects))
-            }
+struct Session: Sendable, Equatable {
+    let token: String
+}
 
-            continuation.finish()
+enum AuthState: Sendable, Equatable {
+    case idle
+    case submitting(Credentials)
+    case authenticated(Session)
+    case failed(message: String)
+}
+
+enum AuthEvent: Sendable, Equatable {
+    case submitWasRequested(Credentials)
+    case sessionWasStarted(Session)
+    case sessionStartDidFail(message: String)
+}
+
+enum AuthEffect: Sendable, Equatable {
+    case startSession(Credentials)
+}
+
+enum AuthMachine {
+    static func reduce(
+        state: AuthState,
+        event: AuthEvent
+    ) -> Transition<AuthState, AuthEffect> {
+        switch (state, event) {
+        case (_, .submitWasRequested(let credentials)):
+            return .init(
+                state: .submitting(credentials),
+                effects: [.startSession(credentials)]
+            )
+
+        case (.submitting, .sessionWasStarted(let session)):
+            return .init(
+                state: .authenticated(session),
+                effects: []
+            )
+
+        case (.submitting, .sessionStartDidFail(let message)):
+            return .init(
+                state: .failed(message: message),
+                effects: []
+            )
+
+        default:
+            return .init(state: state, effects: [])
         }
     }
 }
 ```
 
-Usage:
+The reducer is pure. The only side effects are described in `AuthEffect`.
+
+## Effect execution in Swift 6.2+
+
+Prefer `@concurrent` effect executors over dedicated worker actors only when the effect must intentionally leave caller isolation and the effect itself is stateless.
 
 ```swift
-let stepStream = steps(
-    initial: CounterState(value: 0),
-    events: counterEvents(),
-    reduce: counterReduce
-)
+import Foundation
 
-for await step in stepStream {
-    print("state =", step.state.value, "effects =", step.effects)
-}
-```
-
----
-
-## 7) Interpreting effects asynchronously
-
-Effects are interpreted in the **imperative shell**.
-
-```swift
-struct CounterEnvironment {
-    var log: (String) async -> Void
+struct AuthenticationClient: Sendable {
+    let authenticate: @Sendable (Credentials) async throws -> Session
 }
 
-func interpret(effect: CounterEffect, env: CounterEnvironment) async {
-    switch effect {
-    case .log(let msg):
-        await env.log(msg)
-    }
-}
-```
-
-### Wiring it together
-
-```swift
-let env = CounterEnvironment(log: { print("LOG:", $0) })
-
-for await step in stepStream {
-    for effect in step.effects {
-        await interpret(effect: effect, env: env)
-    }
-}
-```
-
----
-
-## 8) Feedback loop: effects producing new events
-
-Many effects produce **new events** (e.g. network responses).
-
-This creates a feedback loop:
-
-```
-Event ─► Reducer ─► Effect ─► Async work ─► Event
-```
-
-### Pattern: event continuation
-
-```swift
-func makeEventStream() -> (AsyncStream<CounterEvent>, AsyncStream<CounterEvent>.Continuation) {
-    var continuation: AsyncStream<CounterEvent>.Continuation!
-    let stream = AsyncStream<CounterEvent> {
-        continuation = $0
-    }
-    return (stream, continuation)
-}
-```
-
-Example usage:
-
-```swift
-let (events, emit) = makeEventStream()
-
-Task {
-    emit.yield(.increment)
-    emit.yield(.increment)
-}
-
-let stepStream = steps(
-    initial: CounterState(value: 0),
-    events: events,
-    reduce: counterReduce
-)
-
-Task {
-    for await step in stepStream {
-        print("state =", step.state.value)
-    }
-}
-```
-
-Effects can call `emit.yield(...)` to feed results back into the system.
-
----
-
-## 9) Extended state machines as streams
-
-Extended state machines work the same way:
-- `State` becomes a `(mode + context)` struct
-- the reducer is unchanged
-- the output is still a stream of states
-
-This makes them ideal for:
-- UI state binding
-- SwiftUI `.task` / `.onReceive`
-- replayable tests
-
----
-
-## 10) Testing AsyncSequence-based state machines
-
-Because reducers are pure, you usually test:
-- reducer logic synchronously
-- stream wiring separately
-
-### Example: collecting states
-
-```swift
-func collectStates<S: Equatable>(
-    from stream: some AsyncSequence<S, Never>
-) async -> [S] {
-    var result: [S] = []
-    for await s in stream {
-        result.append(s)
-    }
-    return result
-}
-```
-
-Test:
-
-```swift
-@Test
-func counterStateStreamProducesExpectedStates() async {
-    let events = AsyncStream<CounterEvent> {
-        $0.yield(.increment)
-        $0.yield(.increment)
-        $0.finish()
-    }
-
-    let stream = states(
-        initial: CounterState(value: 0),
-        events: events,
-        reduce: counterReduce
-    )
-
-    let collected = await collectStates(from: stream)
-
-    #expect(collected.map(\.value) == [0, 1, 2])
-}
-```
-
----
-
-## 11) Mental model
-
-- Reducer = **pure transition**
-- AsyncSequence = **time**
-- State machine = **stream of states**
-- Effects = **instructions crossing the boundary**
-
-This model scales cleanly from:
-- simple counters
-- to UI flows
-- to complex async workflows
-
----
-
-## 7) AsyncSequence: “a state machine is a stream of states”
-
-For UI and reactive flows, it’s often useful to treat a reducer-driven state machine as a **stream**:
-
-- input: an `AsyncSequence` of `Event`s
-- output: an `AsyncSequence` of `State`s (and optionally `Effect`s)
-
-There are a few practical shapes depending on what you want to expose.
-
-### A) Stream of states (pure replay, no effects)
-
-This is the simplest definition of “a state machine is a stream of states”:
-
-```swift
-/// Turns a stream of events into a stream of states by applying a pure reducer.
-func states<State, Event>(
-    initial: State,
-    events: some AsyncSequence<Event>,
-    reduce: @escaping (State, Event) -> State
-) -> AsyncStream<State> {
-    AsyncStream { continuation in
-        Task {
-            var state = initial
-            continuation.yield(state)
-
-            for await event in events {
-                state = reduce(state, event)
-                continuation.yield(state)
+enum AuthEffects {
+    @concurrent
+    static func run(
+        _ effect: AuthEffect,
+        client: AuthenticationClient
+    ) async -> AuthEvent? {
+        switch effect {
+        case .startSession(let credentials):
+            do {
+                let session = try await client.authenticate(credentials)
+                return .sessionWasStarted(session)
+            } catch {
+                return .sessionStartDidFail(message: String(describing: error))
             }
-
-            continuation.finish()
         }
     }
 }
 ```
 
-Example:
+## Orchestration shell
+
+The shell owns tasks, not business rules.
+It is optional.
+
+Use a shell when the view benefits from:
+
+- a simple intent API
+- lifecycle hooks
+- local task ownership and cancellation bookkeeping
+
+Skip the shell when the state machine itself already exposes the right state stream and command surface for the feature.
 
 ```swift
-func counterReduceStateOnly(_ state: CounterState, _ event: CounterEvent) -> CounterState {
-    counterReduce(state, event).state
-}
+import Foundation
 
-let stateStream = states(
-    initial: CounterState(value: 0),
-    events: eventStream,
-    reduce: counterReduceStateOnly
-)
-```
+@MainActor
+final class AuthStore {
+    private(set) var state: AuthState = .idle
+    private let client: AuthenticationClient
+    private var runningTasks: [UUID: Task<Void, Never>] = [:]
 
-### B) Stream of transitions (state + effects)
+    init(client: AuthenticationClient) {
+        self.client = client
+    }
 
-Often you want effects too.
+    func send(_ event: AuthEvent) {
+        let transition = AuthMachine.reduce(state: state, event: event)
+        state = transition.state
 
-```swift
-func transitions<State, Event, Effect>(
-    initial: State,
-    events: some AsyncSequence<Event>,
-    reduce: @escaping (State, Event) -> Transition<State, Effect>
-) -> AsyncStream<Transition<State, Effect>> {
-    AsyncStream { continuation in
-        Task {
-            var state = initial
-            continuation.yield(.init(state: state, effects: []))
-
-            for await event in events {
-                let t = reduce(state, event)
-                state = t.state
-                continuation.yield(t)
-            }
-
-            continuation.finish()
+        for effect in transition.effects {
+            handle(effect)
         }
     }
-}
-```
 
-Now you can observe states *and* interpret effects at the boundary:
-
-```swift
-let stream = transitions(initial: CounterState(value: 0), events: eventStream, reduce: counterReduce)
-
-Task {
-    for await t in stream {
-        // State observation (UI)
-        render(t.state)
-
-        // Effects interpretation (shell)
-        for fx in t.effects { await interpret(effect: fx, env: env) }
-    }
-}
-```
-
-### C) “Feedback loop”: effects can produce more events (async)
-
-A common architecture pattern:
-1) reducer emits `Effect`
-2) the shell interprets effects and may emit new `Event`s (e.g. network responses)
-3) those events feed back into the reducer
-
-Below is a minimal feedback runner using an `AsyncStream<Event>` as the event bus.
-
-```swift
-/// Interprets an effect and optionally emits follow-up events (e.g. network callbacks).
-typealias EffectInterpreter<Event, Effect> = (Effect) async -> Event?
-
-func feedbackLoop<State, Event, Effect>(
-    initial: State,
-    reduce: @escaping (State, Event) -> Transition<State, Effect>,
-    interpret: @escaping EffectInterpreter<Event, Effect>
-) -> (events: AsyncStream<Event>, send: (Event) -> Void, states: AsyncStream<State>) {
-
-    var continuation: AsyncStream<Event>.Continuation!
-    let events = AsyncStream<Event> { continuation = $0 }
-
-    let states = AsyncStream<State> { stateCont in
-        Task {
-            var state = initial
-            stateCont.yield(state)
-
-            for await event in events {
-                let t = reduce(state, event)
-                state = t.state
-                stateCont.yield(state)
-
-                // interpret effects sequentially (simple and deterministic)
-                for fx in t.effects {
-                    if let followUp = await interpret(fx) {
-                        continuation.yield(followUp)
-                    }
+    private func handle(_ effect: AuthEffect) {
+        let id = UUID()
+        runningTasks[id] = Task { [client] in
+            let nextEvent = await AuthEffects.run(effect, client: client)
+            await MainActor.run {
+                self.runningTasks[id] = nil
+                if let nextEvent {
+                    self.send(nextEvent)
                 }
             }
-
-            stateCont.finish()
         }
     }
-
-    let send: (Event) -> Void = { continuation.yield($0) }
-    return (events: events, send: send, states: states)
 }
 ```
 
-#### Example: Auth flow with async login
+## Lifecycle and cancellation rules
 
-Effects include `.performLogin`. Interpreting it triggers async work and emits a follow-up event.
+Model lifecycle in the machine, not inside effect-building helpers.
+
+Prefer:
+
+- explicit events such as `observationWasStarted`, `retryWasRequested`, `cancellationWasRequested`
+- explicit effects such as `.startObservation`, `.cancelObservation(id:)`
+- cancellation keys or task identifiers owned by the orchestration shell
+
+Avoid:
+
+- ad hoc task cancellation rules hidden in closures
+- effect builders that decide workflow semantics on their own
+
+## Enum states vs concrete states
+
+### Enum state
+
+Use enum state when:
+
+- the workflow is small or medium
+- pattern matching on states is straightforward
+- one type is enough to express the context
+
+### Concrete states plus projected aggregate
+
+Use concrete state types when:
+
+- each state carries very different data
+- you want to project a shared aggregate without a large switch everywhere
+- you want to add states without constantly editing one giant enum consumer
+
+Example projection style:
 
 ```swift
-enum AuthEffect: Equatable {
-    case performLogin(username: String, password: String)
-    case clearSession
-    case toast(String)
+import Foundation
+
+struct SyncProjection: Sendable, Equatable {
+    let isRunning: Bool
+    let errorMessage: String?
 }
 
-func interpretAuthEffect(_ fx: AuthEffect) async -> AuthEvent? {
-    switch fx {
-    case .performLogin(let u, let p):
-        do {
-            let token = try await apiLogin(username: u, password: p)
-            return .loginSucceeded(token: token)
-        } catch {
-            return .loginFailed(message: "Login failed")
-        }
+struct SyncIsIdle: Sendable, Equatable {
+    var superstate: SyncProjection {
+        SyncProjection(isRunning: false, errorMessage: nil)
+    }
+}
 
-    case .clearSession:
-        await sessionStore.clear()
-        return nil
+struct SyncIsRunning: Sendable, Equatable {
+    let progress: Double
 
-    case .toast:
-        return nil
+    var superstate: SyncProjection {
+        SyncProjection(isRunning: true, errorMessage: nil)
+    }
+}
+
+struct SyncHasFailed: Sendable, Equatable {
+    let message: String
+
+    var superstate: SyncProjection {
+        SyncProjection(isRunning: false, errorMessage: message)
     }
 }
 ```
 
-Run:
+## Parent and child coordination
+
+- Keep child workflows reusable and unaware of the parent where possible.
+- Parent workflows should translate child outcomes into parent events explicitly.
+- Join rules, supervision, and cross-flow coordination belong in the parent workflow or the composition boundary, not in effect executors.
+
+## Streams
+
+When a workflow needs a local event stream for tests or adapters, prefer the standard library API:
 
 ```swift
-let loop = feedbackLoop(
-    initial: AuthModel(state: .loggedOut, context: .init(username: "", token: nil, message: nil)),
-    reduce: authReduce,
-    interpret: interpretAuthEffect
-)
+import Foundation
 
-// UI: send events
-loop.send(.submit(username: "a", password: "b"))
-
-// UI: observe state stream
-Task {
-    for await s in loop.states {
-        renderAuth(s)
-    }
-}
+let (events, continuation) = AsyncStream.makeStream(of: AuthEvent.self)
+_ = events
+_ = continuation
 ```
 
-### D) Concurrency and ordering notes
+That same style can be used as the public feature-state surface when a separate store object would add no value, but do not treat `AsyncStream` as a magic boundary type. Make buffering, termination, and consumer semantics explicit if the stream escapes a local adapter or test seam.
 
-- The examples above interpret effects **sequentially** to keep ordering deterministic.
-- If you need parallelism, you can run effects concurrently, but you must decide:
-  - ordering of follow-up events
-  - cancellation semantics
-  - state consistency under concurrent event injection
+## Smells
 
-A pragmatic default: sequential interpretation + explicit cancellation events when needed.
-
-### E) Cancellation (minimal pattern)
-
-Add a cancellation token in state, or model it as an effect.
-
-Example effect:
-
-```swift
-enum Effect {
-    case startRequest(id: UUID)
-    case cancelRequest(id: UUID)
-}
-```
-
-Your interpreter owns the Task map keyed by `id` and cancels on demand.
-
----
-
-## 8) Takeaway
-
-- A reducer is a Mealy machine.
-- An `AsyncSequence<Event>` + reducer gives you an `AsyncSequence<State>`: a stream of states.
-- Effects make it practical: interpret effects to do async work and feed results back as events.
+- Side effects performed inside `reduce`
+- A worker actor added only to call a stateless async function
+- Parent-child wiring hidden in global singletons
+- Fast path behavior implemented as a separate API instead of a branch in the machine
+- Cancellation rules spread across helpers instead of modeled as events and effects

@@ -1,87 +1,61 @@
-# Functional Architecture in Swift (Agent Skill)
+# Functional Architecture in Swift
 
-This repository is an agent skill for AI coding assistants. It teaches Swift
-functional programming patterns for domain and core logic: immutability, pure
-functions, composition, state machines, reducers, dependency injection via functions,
-and effects as data.
+This repository packages the `functional-programming-developer` skill for AI coding assistants.
+The actual skill payload lives under `skills/`.
 
-## What's inside
+The skill is now focused on Swift 6.2+ architecture:
 
-- `SKILL.md` with the skill metadata and core instructions.
-- `references/` with deeper reading:
-  - `state-machines.md`
-  - `functional-operators.md`
-  - `algebraic-data-types.md`
-  - `optics.md`
-  - `dependency-injection-currying.md`
-  - `dependency-injection-decision-table.md`
+- layers and dependency direction
+- domain modeling and immutability
+- algebraic data types, composition, effects as data, and validation
+- reducers and state machines
+- dependency injection and composition roots
+- strict concurrency boundaries
+- testability
 
-## Install
+## Layout
 
-This repository already matches the agent skills folder layout (a skills folder
-with a required `SKILL.md` and optional supporting folders).
+- `skills/SKILL.md`: entrypoint and reference map
+- `skills/agents/openai.yaml`: UI metadata
+- `skills/references/`: focused reference files loaded on demand
 
-### Codex (CLI or IDE)
+## Reference files
 
-Codex can load skills from either a per-user directory or a repo-local
-directory. After installing, restart Codex.
+- `layers-and-boundaries.md`
+- `new-feature-playbook.md`
+- `state-management-repository-factory-boundaries.md`
+- `solid-in-functional-swift.md`
+- `domain-modeling.md`
+- `algebraic-data-types-and-totality.md`
+- `function-composition.md`
+- `effects-as-data.md`
+- `validation-and-error-modeling.md`
+- `dependency-injection.md`
+- `strict-concurrency-boundaries.md`
+- `state-machines.md`
+- `testability.md`
+- `functional-operators.md`
+- `optics.md`
+
+## Installation
+
+Codex can load skills from either a per-user directory or a repo-local directory.
 
 Per-user:
 
 ```sh
 mkdir -p ~/.codex/skills
-cp -R /path/to/this/repo ~/.codex/skills/functional-programming-developer
+cp -R /path/to/this/repo/skills ~/.codex/skills/functional-programming-developer
 ```
 
 Per-repo:
 
 ```sh
 mkdir -p .codex/skills
-cp -R /path/to/this/repo .codex/skills/functional-programming-developer
+cp -R /path/to/this/repo/skills .codex/skills/functional-programming-developer
 ```
 
-Use it by invoking `$functional-programming-developer` or by describing a task
-that matches the skill so Codex can select it automatically.
-
-### Claude Code
-
-Claude Code supports skills and can load them automatically when relevant.
-For manual installation, place this folder under your Claude Code skills
-directory (commonly `~/.claude/skills`).
-
-```sh
-mkdir -p ~/.claude/skills
-cp -R /path/to/this/repo ~/.claude/skills/functional-programming-developer
-```
-
-## Usage
-
-Codex example:
-
-```
-$functional-programming-developer
-Model this feature with reducers and explicit effects.
-```
-
-Claude Code example:
-
-```
-Use the Functional Architecture in Swift skill to refactor this domain layer
-into pure functions with injected effects.
-```
-
-## Contributing
-
-Contributions are welcome. Suggested ways to help:
-
-- Refine the rules in `SKILL.md` while keeping the focus on functional core
-  patterns and testability.
-- Add or improve reference docs in `references/` and update the reading order
-  in `SKILL.md`.
-- Keep changes aligned with the agent skills folder structure (`SKILL.md`
-  required, optional `references/`, `scripts/`, `assets/`).
-
-Open a PR with a short rationale and examples if applicable.
+Invoke it explicitly with `$functional-programming-developer`, or let the agent select it when the task matches the skill description.
 
 ## License
 

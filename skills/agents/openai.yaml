@@ -1,0 +1,7 @@
+interface:
+  display_name: "Functional Architecture in Swift"
+  short_description: "Swift 6.2+ architecture and strict concurrency"
+  default_prompt: "Use $functional-programming-developer to design this Swift feature with clear layers, pure reducers, strict concurrency boundaries, and testable dependency seams."
+
+policy:
+  allow_implicit_invocation: true
