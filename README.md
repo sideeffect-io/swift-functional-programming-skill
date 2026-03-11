@@ -1,6 +1,6 @@
-# Functional Architecture in Swift
+# Swift Functional Architecture
 
-This repository packages the `functional-programming-developer` skill for AI coding assistants.
+This repository packages the `swift-functional-architecture` skill for AI coding assistants.
 The actual skill payload lives under `skills/`.
 
 The skill is now focused on Swift 6.2+ architecture:
@@ -39,23 +39,93 @@ The skill is now focused on Swift 6.2+ architecture:
 
 ## Installation
 
-Codex can load skills from either a per-user directory or a repo-local directory.
+### Manual
 
-Per-user:
+Copy or symlink the repository's [`skills/`](./skills) directory into the skills directory used by your agent, under the name `swift-functional-architecture`.
 
-```sh
+Useful references:
+
+- Agent Skills format: [agentskills.io](https://agentskills.io/)
+- Codex skills docs: [developers.openai.com/codex/skills](https://developers.openai.com/codex/skills/)
+- Claude Code skills docs: [platform.claude.com/docs/en/agents-and-tools/agent-skills/overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+
+Example using a copy:
+
+```bash
 mkdir -p ~/.codex/skills
-cp -R /path/to/this/repo/skills ~/.codex/skills/functional-programming-developer
+cp -R /path/to/this/repo/skills \
+  ~/.codex/skills/swift-functional-architecture
 ```
 
-Per-repo:
+Example using a symlink:
 
-```sh
-mkdir -p .codex/skills
-cp -R /path/to/this/repo/skills .codex/skills/functional-programming-developer
+```bash
+mkdir -p ~/.codex/skills
+ln -s /path/to/this/repo/skills \
+  ~/.codex/skills/swift-functional-architecture
 ```
 
-Invoke it explicitly with `$functional-programming-developer`, or let the agent select it when the task matches the skill description.
+### npx
+
+If you use the open Agent Skills CLI, install directly from GitHub with:
+
+```bash
+npx skills add https://github.com/sideeffect-io/swift-functional-programming-skill \
+  --skill swift-functional-architecture
+```
+
+Useful variants:
+
+```bash
+# Install globally for your user
+npx skills add https://github.com/sideeffect-io/swift-functional-programming-skill \
+  --skill swift-functional-architecture -g
+
+# Install specifically for Codex and Claude Code
+npx skills add https://github.com/sideeffect-io/swift-functional-programming-skill \
+  --skill swift-functional-architecture \
+  -a codex -a claude-code
+```
+
+### Codex
+
+Install the skill folder into either:
+
+- Project scope: `.codex/skills/`
+- User scope: `~/.codex/skills/`
+
+The installed folder should look like:
+
+```text
+.codex/
+  skills/
+    swift-functional-architecture/
+      SKILL.md
+      agents/
+      references/
+```
+
+After installation, invoke it explicitly with `$swift-functional-architecture`, or let Codex select it when the task matches the skill description.
+
+### Claude Code
+
+Install the skill folder into either:
+
+- Project scope: `.claude/skills/`
+- User scope: `~/.claude/skills/`
+
+The installed folder should look like:
+
+```text
+.claude/
+  skills/
+    swift-functional-architecture/
+      SKILL.md
+      agents/
+      references/
+```
+
+After installation, invoke it explicitly with `/swift-functional-architecture`, or let Claude Code select it automatically when relevant.
 
 ## License
 

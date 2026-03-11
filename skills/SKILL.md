@@ -1,5 +1,5 @@
 ---
-name: functional-programming-developer
+name: swift-functional-architecture
 description: Functional architecture guidance for Swift 6.2+ with strict concurrency, layering, reducers, state machines, dependency injection, domain modeling, algebraic data types, effects as data, immutability, and testability.
 ---
 
