@@ -67,7 +67,7 @@ Use capability structs when:
 - you want named overrides in tests
 - call sites become noisy with many standalone closures
 
-## Output structs are useful orchestration adapters
+## Named effect executors are useful orchestration adapters
 
 ```swift
 import Foundation
@@ -77,7 +77,7 @@ enum AuthenticationEvent: Sendable, Equatable {
     case sessionFailed(message: String)
 }
 
-struct StartSessionOutput: Sendable {
+struct StartSessionEffectExecutor: Sendable {
     let authenticate: @Sendable (Credentials) async throws -> Session
 
     @concurrent
@@ -92,7 +92,7 @@ struct StartSessionOutput: Sendable {
 }
 ```
 
-This is a good fit when a workflow wants a named capability that maps raw dependency results into domain events.
+This is a good fit when a workflow wants a named effect executor that maps raw dependency results into domain events.
 
 ## Protocols are boundary tools
 

@@ -117,7 +117,7 @@ At the app boundary:
 Use this path when the feature is mostly projection and a few commands.
 
 1. Model domain values
-2. Define authoritative source-of-truth inputs and outputs
+2. Define authoritative source-of-truth reads and writes
 3. Add a minimal reducer or thin state manager
 4. Add effect executors if commands are needed
 5. Add targeted tests for pure logic and command mapping
