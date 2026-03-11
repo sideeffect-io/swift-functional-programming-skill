@@ -104,6 +104,6 @@ enum SaveInterpreter {
 
 ## Smells
 
-- reducers that call repositories directly
+- reducers that call source-of-truth boundaries directly
 - hidden side effects in computed properties or initializers
 - workflow rules split between transition logic and effect helpers

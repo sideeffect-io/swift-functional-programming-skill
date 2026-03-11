@@ -139,4 +139,4 @@ Choose this style when each state carries distinct data and you want a projected
 - Multiple optionals whose presence depends on a hidden mode
 - A "kind" field plus many unrelated stored properties
 - Domain values that know transport, storage, or framework details
-- Repositories or feature-state managers patching invalid domain values after the fact
+- Source-of-truth boundaries or feature-state managers patching invalid domain values after the fact

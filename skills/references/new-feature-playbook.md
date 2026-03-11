@@ -33,7 +33,7 @@ Decide explicitly:
 - what state is derived
 - what transient optimistic or pending state is allowed
 
-Authoritative state usually belongs in a repository or another explicit domain boundary. Transient local state belongs in the feature-state layer.
+Authoritative state usually belongs in a source-of-truth boundary or another explicit domain boundary. Transient local state belongs in the feature-state layer.
 
 ## 4. Choose the feature-state shape
 
@@ -86,7 +86,7 @@ For each effect, decide:
 
 Keep lifecycle and cancellation policy visible in the workflow model, not hidden inside helpers.
 
-## 7. Define repository boundaries
+## 7. Define source-of-truth boundaries
 
 Ask:
 
@@ -94,7 +94,7 @@ Ask:
 - does it merge multiple sources?
 - does it own cross-aggregate coherence?
 
-If yes, put that logic in a repository boundary, not in factories or in ad hoc task closures.
+If yes, put that logic in a source-of-truth boundary, not in factories or in ad hoc task closures.
 
 ## 8. Define dependency injection and composition
 
@@ -108,7 +108,7 @@ At the app boundary:
 
 - factories assemble concrete dependencies
 - factories connect features together
-- factories do not hide business rules that belong in the reducer, state machine, or repository
+- factories do not hide business rules that belong in the reducer, state machine, or source-of-truth boundary
 
 ## 9. Pick the delivery path
 
@@ -117,7 +117,7 @@ At the app boundary:
 Use this path when the feature is mostly projection and a few commands.
 
 1. Model domain values
-2. Define authoritative repository inputs and outputs
+2. Define authoritative source-of-truth inputs and outputs
 3. Add a minimal reducer or thin state manager
 4. Add effect executors if commands are needed
 5. Add targeted tests for pure logic and command mapping
@@ -137,7 +137,7 @@ Use this path when retries, cancellation, parallel flows, or long-lived async be
 - Domain: invariants and parsing
 - Pure logic: transitions, merge rules, projections
 - Effect executors: `effect -> event/result` with fake capabilities
-- Repositories: authoritative-state rules and reconciliation
+- Source-of-truth boundaries: authoritative-state rules and reconciliation
 - Composition: light smoke tests only when wiring is non-trivial
 
 Do not rely on full integration tests to validate logic that could be pure.
@@ -150,7 +150,7 @@ Do not rely on full integration tests to validate logic that could be pure.
 - Are side effects represented explicitly?
 - Are dependency seams narrow and `Sendable` where appropriate?
 - Are factories wiring only, not deciding business behavior?
-- Are repositories owning persistence and cross-source coherence where needed?
+- Are source-of-truth boundaries owning persistence and cross-source coherence where needed?
 - Are tests aligned with the layer responsibilities?
 
 If any answer is unclear, the feature is not fully designed yet.

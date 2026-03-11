@@ -38,7 +38,7 @@ Use that distinction intentionally.
 
 ### Shared mutable state
 
-- Use an actor, repository, or another explicit serialization boundary.
+- Use an actor, source-of-truth boundary, or another explicit serialization boundary.
 - Do not introduce an actor only to wrap stateless async functions.
 
 ## Example: `@concurrent` effect executor

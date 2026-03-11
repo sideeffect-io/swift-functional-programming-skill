@@ -23,7 +23,7 @@ The skill is now focused on Swift 6.2+ architecture:
 
 - `layers-and-boundaries.md`
 - `new-feature-playbook.md`
-- `state-management-repository-factory-boundaries.md`
+- `state-management-source-of-truth-factory-boundaries.md`
 - `solid-in-functional-swift.md`
 - `domain-modeling.md`
 - `algebraic-data-types-and-totality.md`

@@ -10,7 +10,7 @@ Architecture is testability made visible.
 | Pure policies | input/output examples and edge cases |
 | Reducers or state machines | `state + event -> new state + effects` |
 | Effect executors | `effect + fake dependencies -> event/result` |
-| Repositories | merge, reconciliation, and source-of-truth rules |
+| Source-of-truth boundaries | merge, reconciliation, and source-of-truth rules |
 | Factories | light smoke tests only when the wiring is non-trivial |
 
 ## Preferred strategy
@@ -18,7 +18,7 @@ Architecture is testability made visible.
 - Test pure logic directly with values.
 - Use closure fakes instead of mock objects.
 - Keep dependency surfaces narrow so tests override only what they need.
-- Test repository merge rules separately from feature-state behavior.
+- Test source-of-truth boundary merge rules separately from feature-state behavior.
 - Test effect executors separately from reducers.
 
 ## What strict concurrency changes
@@ -32,7 +32,7 @@ Architecture is testability made visible.
 
 - Reducer tests should never need live infrastructure.
 - `@concurrent` executors should be testable with in-memory closure dependencies.
-- Repository tests should use an in-memory backing store or a fake DAO boundary rather than full system integration by default.
+- Source-of-truth boundary tests should use an in-memory backing store or a fake lower-level data source rather than full system integration by default.
 
 ## Smells
 

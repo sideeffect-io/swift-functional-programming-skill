@@ -1,4 +1,4 @@
-# Feature State, Repository, and Factory Boundaries
+# Feature State, Source-of-Truth Boundaries, and Factories
 
 These three boundaries drift easily. Keep them explicit.
 
@@ -31,7 +31,7 @@ This layer does not:
 
 Examples in this skill use `AsyncStream` because it is a built-in concrete stream type.
 
-At a real feature or repository boundary, be explicit about:
+At a real feature or source-of-truth boundary, be explicit about:
 
 - buffering policy
 - who finishes the stream
@@ -39,16 +39,19 @@ At a real feature or repository boundary, be explicit about:
 
 Do not let callers depend on raw `AsyncStream` behavior accidentally.
 
-## Repositories
+## Source-of-truth boundaries
 
-Repositories are source-of-truth boundaries.
+Source-of-truth boundaries own authoritative state and cross-source coherence when the architecture needs one.
+
+A repository is one possible implementation shape for such a boundary.
+A data source is usually a lower-level provider that the boundary composes.
 
 - Own authoritative snapshots, merges, and write semantics
 - Expose domain-focused read and write capabilities
 - Compose lower-level storage or client details
 - May orchestrate across multiple underlying sources when coherence matters
 
-Repositories do not:
+Source-of-truth boundaries do not:
 
 - Become generic service bags
 - Own feature-local transient state
@@ -66,21 +69,21 @@ Factories are composition boundaries.
 Factories do not:
 
 - Hold evolving runtime state
-- Contain hidden workflow branches that belong in reducers or repositories
-- Replace repositories as the place where cross-aggregate invariants live
+- Contain hidden workflow branches that belong in reducers or source-of-truth boundaries
+- Replace source-of-truth boundaries as the place where cross-aggregate invariants live
 
 ## Ownership rules
 
 | Concern | Primary owner |
 |---|---|
 | Pending command state | Feature-state layer |
-| Persistent entity state | Repository |
+| Persistent entity state | Source-of-truth boundary |
 | Cross-feature wiring | Factory |
 | Workflow transition rules | Reducer or state machine |
-| Merge and reconciliation rules | Repository or pure policy |
+| Merge and reconciliation rules | Source-of-truth boundary or pure policy |
 | Concrete dependency assembly | Factory |
 
-## Example: cross-aggregate orchestration belongs in a repository
+## Example: cross-aggregate orchestration belongs in a source-of-truth boundary
 
 ```swift
 import Foundation
@@ -91,34 +94,34 @@ struct Favorite: Sendable, Equatable {
     let rank: Int
 }
 
-struct FavoritesRepository: Sendable {
+struct FavoritesSourceOfTruth: Sendable {
     let observe: @Sendable () -> AsyncStream<[Favorite]>
     let reorder: @Sendable ([UUID]) async throws -> Void
 }
 
-struct ScenesRepository: Sendable {
+struct ScenesSourceOfTruth: Sendable {
     let observe: @Sendable () -> AsyncStream<[Favorite]>
     let reorder: @Sendable ([UUID]) async throws -> Void
 }
 
-struct DashboardRepository: Sendable {
+struct DashboardSourceOfTruth: Sendable {
     let observeFavorites: @Sendable () -> AsyncStream<[Favorite]>
     let reorderFavorites: @Sendable ([UUID]) async throws -> Void
 }
 ```
 
-The important idea is not the exact API shape. It is that the cross-source merge and reorder behavior belongs in an explicit repository boundary, not in ad hoc closure logic inside a feature-state factory. `AsyncStream` is only a concrete example, not a required public contract.
+The important idea is not the exact API shape. It is that the cross-source merge and reorder behavior belongs in an explicit source-of-truth boundary, not in ad hoc closure logic inside a feature-state factory. `AsyncStream` is only a concrete example, not a required public contract.
 
 ## Coordination rules
 
 - Parent-child feature-state coordination uses explicit closures, events, or composed capabilities.
-- If two sources must stay consistent, hide the coordination behind one repository boundary.
+- If two sources must stay consistent, hide the coordination behind one source-of-truth boundary.
 - If multiple feature-state managers need the same authoritative stream, do not duplicate merge logic in every one.
-- If a feature-state manager starts owning too many concrete dependencies, move orchestration down into a repository or up into a factory.
+- If a feature-state manager starts owning too many concrete dependencies, move orchestration down into a source-of-truth boundary or up into a factory.
 
 ## Smells
 
 - A factory containing reorder or merge algorithms
 - A feature-state manager with knowledge of multiple persistence backends
-- A repository returning UI-only flags that should be derived higher up
+- A source-of-truth boundary returning UI-only flags that should be derived higher up
 - A parent feature reaching into child internals instead of sending events or capabilities

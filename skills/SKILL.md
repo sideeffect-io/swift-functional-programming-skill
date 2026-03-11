@@ -44,7 +44,7 @@ This is a functional-programming-oriented architecture skill, not a generic laye
 - Reducers remain pure: `(State, Event) -> Transition<State, Effect>`.
 - Feature-state management is a role, not a mandatory type. It may be a store, a directly consumed state machine, or another thin orchestration shell.
 - If you use stores, they orchestrate tasks and observation, but they do not create peer stores implicitly.
-- Repositories own authoritative state and cross-aggregate orchestration when a source of truth must stay coherent.
+- Source-of-truth boundaries own authoritative state and cross-aggregate orchestration when a source of truth must stay coherent.
 - Factories and bootstrap code own wiring. They assemble concrete dependencies and feature graphs.
 - Inward layers depend on capabilities, not concrete implementations.
 - Prefer composition over inheritance. Inheritance is a framework constraint, not an architecture default.
@@ -56,7 +56,7 @@ This is a functional-programming-oriented architecture skill, not a generic laye
 - Use `@concurrent` sparingly, only for effect executors that must intentionally leave caller isolation and run concurrently with the caller.
 - If an async helper should stay on the caller's actor, rely on `NonisolatedNonsendingByDefault` when enabled; otherwise spell `nonisolated(nonsending)` explicitly in reusable examples.
 - Prefer pure or `nonisolated` helpers over actor-isolated helpers when no isolated mutable state is needed.
-- Use actors for true serialization boundaries only: shared mutable caches, authoritative repositories, or coordination points with identity and lifecycle.
+- Use actors for true serialization boundaries only: shared mutable caches, authoritative source-of-truth boundaries, or coordination points with identity and lifecycle.
 
 ## Decision table
 
@@ -68,7 +68,7 @@ This is a functional-programming-oriented architecture skill, not a generic laye
 | A few dependencies | Individual closure parameters |
 | A related group of dependencies | `Sendable` capability struct |
 | Runtime polymorphism or external integration seam | Protocol at the outer boundary |
-| Shared mutable state | Actor or repository, not a default worker actor |
+| Shared mutable state | Actor or source-of-truth boundary, not a default worker actor |
 
 ## Anti-patterns
 
@@ -78,7 +78,7 @@ This is a functional-programming-oriented architecture skill, not a generic laye
 - Effect builders that hide lifecycle or cancellation policy outside the workflow model
 - Protocol per concrete type when a closure or capability struct would do
 - An actor per feature by default
-- Repositories that leak raw infrastructure details upward
+- Source-of-truth boundaries that leak raw infrastructure details upward
 - Multiple booleans that describe mutually exclusive workflow states
 
 ## Reference map
@@ -89,8 +89,8 @@ Load only the files needed for the task.
   - Start here for the architecture map and dependency direction rules.
 - `references/new-feature-playbook.md`
   - Read when implementing a feature end-to-end and you need a whole-feature workflow, not just isolated architecture rules.
-- `references/state-management-repository-factory-boundaries.md`
-  - Read when responsibilities are drifting between feature-state management, source of truth, and composition.
+- `references/state-management-source-of-truth-factory-boundaries.md`
+  - Read when responsibilities are drifting between feature-state management, source-of-truth ownership, and composition.
 - `references/solid-in-functional-swift.md`
   - Read when discussing SOLID, composition over inheritance, and abstraction quality.
 - `references/domain-modeling.md`

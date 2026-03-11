@@ -13,7 +13,7 @@ Prefer:
 Avoid:
 
 - God stores or god state managers
-- Catch-all repositories
+- Catch-all source-of-truth boundaries
 - Enums or structs that mix domain data, IO, and rendering concerns
 
 ## Open/Closed
@@ -66,7 +66,7 @@ Prefer:
 Avoid:
 
 - Domain logic that reaches directly into networking or persistence APIs
-- Reducers that know concrete repository internals
+- Reducers that know concrete source-of-truth internals
 
 ## Example: composition beats inheritance
 
