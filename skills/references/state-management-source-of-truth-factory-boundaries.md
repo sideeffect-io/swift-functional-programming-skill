@@ -8,17 +8,19 @@ The feature-state layer is a role, not a mandatory `Store` type.
 
 Common shapes:
 
-- a store object that exposes feature state and intents
+- a store object acting as a thin orchestration shell over a reducer or state machine
 - a directly consumed state machine or `AsyncSequence` of states
 - another thin orchestration shell that owns event handling and effect launching
 
 Whatever shape you choose, this layer is an application-orchestration unit.
+A store is the common shape when lifecycle hooks, task ownership, or feature-local runtime state matter.
 
 - Hold feature state that changes in response to events
 - Apply pure transition logic
+- Own task-slot and cancellation policy
 - Start and cancel tasks
 - Subscribe to observation streams
-- Map effect results back into events
+- Forward named effect-executor outputs back into events
 
 This layer does not:
 
@@ -26,6 +28,8 @@ This layer does not:
 - Own authoritative persistent state
 - Know how infrastructure is built
 - Hide business rules inside task bodies
+- Interpret raw capability results inline when named effect executors would keep the shell concise
+- Expose a large raw dependency bag as the default public API when explicit executors are clearer
 
 ## Observation stream boundaries
 
@@ -62,9 +66,11 @@ Source-of-truth boundaries do not:
 Factories are composition boundaries.
 
 - Assemble concrete dependencies
-- Build feature-state managers with narrow capabilities
+- Bind immutable feature context such as identifiers or route parameters
+- Build effect executors and feature-state managers with narrow capabilities
 - Connect parent and child features
 - Choose concrete live, preview, or test wiring
+- Prefer returning assembled feature-state managers over intermediate dependency bags when that keeps the composition boundary clearer
 
 Factories do not:
 
@@ -80,6 +86,8 @@ Factories do not:
 | Persistent entity state | Source-of-truth boundary |
 | Cross-feature wiring | Factory |
 | Workflow transition rules | Reducer or state machine |
+| Task-slot and cancellation policy | Feature-state layer |
+| Effect interpretation | Effect executor |
 | Merge and reconciliation rules | Source-of-truth boundary or pure policy |
 | Concrete dependency assembly | Factory |
 

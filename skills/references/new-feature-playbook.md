@@ -50,6 +50,7 @@ The feature-state layer is a role, not a mandatory type.
 - the consumer needs a simpler intent API
 - the feature needs lifecycle hooks or task ownership
 - you need local pending state, derived state, or effect bookkeeping around the workflow
+- the shell can stay thin and act as an orchestration runtime over a reducer plus named effect executors
 
 ### Use a thin coordinator shell when
 
@@ -83,6 +84,7 @@ For each effect, decide:
 - which capability it needs
 - whether it should inherit caller isolation or run with `@concurrent`
 - which event or result it feeds back into the feature
+- whether its executor shape is `AsyncStream<Event>`, `Event?`, or `Void`
 
 Keep lifecycle and cancellation policy visible in the workflow model, not hidden inside helpers.
 
@@ -119,7 +121,7 @@ Use this path when the feature is mostly projection and a few commands.
 1. Model domain values
 2. Define authoritative source-of-truth reads and writes
 3. Add a minimal reducer or thin state manager
-4. Add effect executors if commands are needed
+4. Add one named effect executor per command or observation workflow if effects are needed
 5. Add targeted tests for pure logic and command mapping
 
 ### Workflow-heavy feature path
@@ -128,8 +130,8 @@ Use this path when retries, cancellation, parallel flows, or long-lived async be
 
 1. Model states, events, and effects explicitly
 2. Write the pure state machine first
-3. Add interpreters for emitted effects
-4. Add an optional shell only if consumer ergonomics or lifecycle require it
+3. Add one named effect executor per emitted workflow
+4. Add an optional thin shell only if consumer ergonomics or lifecycle require it
 5. Test transitions, effect interpreters, and composition seams separately
 
 ## 10. Test by layer
@@ -146,6 +148,7 @@ Do not rely on full integration tests to validate logic that could be pure.
 
 - Is the source of truth explicit?
 - Is the feature-state shape justified?
+- If this feature uses a store, is it only an orchestration shell?
 - Are reducers and state machines pure?
 - Are side effects represented explicitly?
 - Are dependency seams narrow and `Sendable` where appropriate?

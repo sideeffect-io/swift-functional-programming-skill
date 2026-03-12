@@ -1,6 +1,6 @@
 ---
 name: swift-functional-architecture
-description: Functional architecture guidance for Swift 6.2+ with strict concurrency, layering, reducers, state machines, dependency injection, domain modeling, algebraic data types, effects as data, immutability, and testability.
+description: Functional architecture guidance for Swift 6.2+ with strict concurrency, layering, reducers, state machines, orchestration shells, effect executors, dependency injection, domain modeling, algebraic data types, effects as data, factory-based composition, immutability, and testability.
 ---
 
 # Functional Architecture in Swift
@@ -43,9 +43,10 @@ This is a functional-programming-oriented architecture skill, not a generic laye
 - Pure decision logic is synchronous whenever possible and returns data, not side effects.
 - Reducers remain pure: `(State, Event) -> Transition<State, Effect>`.
 - Feature-state management is a role, not a mandatory type. It may be a store, a directly consumed state machine, or another thin orchestration shell.
-- If you use stores, they orchestrate tasks and observation, but they do not create peer stores implicitly.
+- If you use stores, keep them thin orchestration shells. They own runtime state, task slots, lifecycle hooks, and event forwarding, but not large dependency bags or infrastructure assembly.
+- Prefer one named `EffectExecutor` per workflow. Executors interpret emitted effects and map capability results into `AsyncStream<Event>`, `Event?`, or `Void`.
 - Source-of-truth boundaries own authoritative state and cross-aggregate orchestration when a source of truth must stay coherent.
-- Factories and bootstrap code own wiring. They assemble concrete dependencies and feature graphs.
+- Factories and bootstrap code own wiring. They bind immutable feature context, assemble executors, and return ready-to-use feature-state managers.
 - Inward layers depend on capabilities, not concrete implementations.
 - Prefer composition over inheritance. Inheritance is a framework constraint, not an architecture default.
 
@@ -64,7 +65,7 @@ This is a functional-programming-oriented architecture skill, not a generic laye
 |---|---|
 | Pure business rule | Free or namespaced pure function |
 | Pure state transition | Reducer or state machine transition |
-| One async effect that must intentionally run off the caller actor | `@concurrent` function returning an event or result |
+| One async effect that must intentionally run off the caller actor | Named `@concurrent` `EffectExecutor` returning a stream, event, or result |
 | A few dependencies | Individual closure parameters |
 | A related group of dependencies | `Sendable` capability struct |
 | Runtime polymorphism or external integration seam | Protocol at the outer boundary |
@@ -80,6 +81,7 @@ This is a functional-programming-oriented architecture skill, not a generic laye
 - An actor per feature by default
 - Source-of-truth boundaries that leak raw infrastructure details upward
 - Multiple booleans that describe mutually exclusive workflow states
+- Stores that mix state transitions, wiring, and infrastructure logic
 
 ## Reference map
 
@@ -91,6 +93,8 @@ Load only the files needed for the task.
   - Read when implementing a feature end-to-end and you need a whole-feature workflow, not just isolated architecture rules.
 - `references/state-management-source-of-truth-factory-boundaries.md`
   - Read when responsibilities are drifting between feature-state management, source-of-truth ownership, and composition.
+- `references/orchestration-shells-effect-executors-and-factories.md`
+  - Read when deciding what belongs in a reducer, store, effect executor, factory, or source-of-truth boundary.
 - `references/solid-in-functional-swift.md`
   - Read when discussing SOLID, composition over inheritance, and abstraction quality.
 - `references/domain-modeling.md`

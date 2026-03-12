@@ -67,7 +67,17 @@ Use capability structs when:
 - you want named overrides in tests
 - call sites become noisy with many standalone closures
 
-## Named effect executors are useful orchestration adapters
+## Named effect executors are the default seam for effectful feature workflows
+
+Use named effect executors when a reducer or state machine emits effects as data and a thin store or shell needs to interpret them.
+
+Default rules:
+
+- use one executor per workflow or observation
+- prefer a concrete `Sendable` struct over a protocol
+- expose `callAsFunction`
+- depend on narrow closures or capability structs
+- return `AsyncStream<Event>` for observation, `Event?` for one-shot workflows, and `Void` for fire-and-forget commands
 
 ```swift
 import Foundation
@@ -81,7 +91,7 @@ struct StartSessionEffectExecutor: Sendable {
     let authenticate: @Sendable (Credentials) async throws -> Session
 
     @concurrent
-    func callAsFunction(_ credentials: Credentials) async -> AuthenticationEvent {
+    func callAsFunction(_ credentials: Credentials) async -> AuthenticationEvent? {
         do {
             let session = try await authenticate(credentials)
             return .sessionStarted(session)
@@ -92,7 +102,30 @@ struct StartSessionEffectExecutor: Sendable {
 }
 ```
 
-This is a good fit when a workflow wants a named effect executor that maps raw dependency results into domain events.
+This keeps effect interpretation explicit without forcing a protocol or a large dependency bag onto the store.
+
+## Factories can bind immutable context
+
+Factories are the right place to bind immutable feature parameters such as identifiers, route parameters, or parent-owned callbacks.
+
+```swift
+import Foundation
+
+struct DeviceStoreFactory: Sendable {
+    let observeDevice: @Sendable (UUID) -> AsyncStream<DeviceEvent>
+    let refreshDevice: @Sendable (UUID) async throws -> DeviceSnapshot
+
+    @MainActor
+    func make(deviceID: UUID) -> DeviceStore {
+        DeviceStore(
+            observeDevice: .init(observe: { observeDevice(deviceID) }),
+            refreshDevice: .init(refresh: { try await refreshDevice(deviceID) })
+        )
+    }
+}
+```
+
+Prefer factories that return ready-to-use feature-state managers over factories that return an intermediate dependency bag when the assembled feature is the clearer seam.
 
 ## Protocols are boundary tools
 
@@ -107,6 +140,7 @@ If the core does not need polymorphism, adapt the protocol into closures at the 
 ## Composition root assembly
 
 - Factories build concrete closure and capability dependencies.
+- Factories bind immutable context and assemble effect executors when the feature needs them.
 - The core consumes those capabilities without caring how they were produced.
 - Tests override only the functions they need.
 

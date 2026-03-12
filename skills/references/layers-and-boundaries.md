@@ -76,26 +76,32 @@ struct DeviceSourceOfTruth: Sendable {
 
 @MainActor
 final class DashboardStore {
-    struct Dependencies: Sendable {
-        let observeDevices: @Sendable () -> AsyncStream<[Device]>
-        let refreshDevices: @Sendable () async throws -> Void
-    }
+    private let observeDevices: ObserveDevicesEffectExecutor
+    private let refreshDevices: RefreshDevicesEffectExecutor
 
-    init(dependencies: Dependencies) {
-        self.dependencies = dependencies
+    init(
+        observeDevices: ObserveDevicesEffectExecutor,
+        refreshDevices: RefreshDevicesEffectExecutor
+    ) {
+        self.observeDevices = observeDevices
+        self.refreshDevices = refreshDevices
     }
-
-    private let dependencies: Dependencies
 }
 
-enum DashboardStoreFactory {
+struct ObserveDevicesEffectExecutor: Sendable {
+    let observe: @Sendable () -> AsyncStream<[Device]>
+}
+
+struct RefreshDevicesEffectExecutor: Sendable {
+    let refresh: @Sendable () async throws -> Void
+}
+
+struct DashboardStoreFactory: Sendable {
     @MainActor
-    static func make(sourceOfTruth: DeviceSourceOfTruth) -> DashboardStore {
+    func make(sourceOfTruth: DeviceSourceOfTruth) -> DashboardStore {
         DashboardStore(
-            dependencies: .init(
-                observeDevices: sourceOfTruth.observe,
-                refreshDevices: sourceOfTruth.refresh
-            )
+            observeDevices: .init(observe: sourceOfTruth.observe),
+            refreshDevices: .init(refresh: sourceOfTruth.refresh)
         )
     }
 }
@@ -105,7 +111,7 @@ What matters in the example:
 
 - The store does not know how the source-of-truth boundary is implemented.
 - The source-of-truth boundary owns observation and refresh capabilities.
-- The factory is the only place where the store sees the concrete source-of-truth boundary.
+- The factory is the only place where the store sees the concrete source-of-truth boundary and binds executors.
 - The same boundary could also expose an async state stream directly instead of wrapping it in a store. The role matters more than the type name.
 - `AsyncStream` is only a concrete example here. Do not let public boundaries inherit unbounded buffering or single-consumer assumptions accidentally.
 

@@ -13,6 +13,8 @@ The skill is now focused on Swift 6.2+ architecture:
 - strict concurrency boundaries
 - testability
 
+It also includes guidance for thin stores as orchestration shells, per-workflow effect executors, and store factories that bind immutable context.
+
 ## Layout
 
 - `skills/SKILL.md`: entrypoint and reference map
@@ -24,6 +26,7 @@ The skill is now focused on Swift 6.2+ architecture:
 - `layers-and-boundaries.md`
 - `new-feature-playbook.md`
 - `state-management-source-of-truth-factory-boundaries.md`
+- `orchestration-shells-effect-executors-and-factories.md`
 - `solid-in-functional-swift.md`
 - `domain-modeling.md`
 - `algebraic-data-types-and-totality.md`

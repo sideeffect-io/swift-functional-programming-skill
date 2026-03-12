@@ -104,7 +104,7 @@ The reducer is pure. The only side effects are described in `AuthEffect`.
 
 ## Effect execution in Swift 6.2+
 
-Prefer `@concurrent` effect executors over dedicated worker actors only when the effect must intentionally leave caller isolation and the effect itself is stateless.
+Prefer named `@concurrent` effect executors over generic static runners when the effect must intentionally leave caller isolation and the effect itself is stateless.
 
 ```swift
 import Foundation
@@ -113,20 +113,16 @@ struct AuthenticationClient: Sendable {
     let authenticate: @Sendable (Credentials) async throws -> Session
 }
 
-enum AuthEffects {
+struct StartSessionEffectExecutor: Sendable {
+    let authenticate: @Sendable (Credentials) async throws -> Session
+
     @concurrent
-    static func run(
-        _ effect: AuthEffect,
-        client: AuthenticationClient
-    ) async -> AuthEvent? {
-        switch effect {
-        case .startSession(let credentials):
-            do {
-                let session = try await client.authenticate(credentials)
-                return .sessionWasStarted(session)
-            } catch {
-                return .sessionStartDidFail(message: String(describing: error))
-            }
+    func callAsFunction(_ credentials: Credentials) async -> AuthEvent? {
+        do {
+            let session = try await authenticate(credentials)
+            return .sessionWasStarted(session)
+        } catch {
+            return .sessionStartDidFail(message: String(describing: error))
         }
     }
 }
@@ -144,6 +140,7 @@ Use a shell when the view benefits from:
 - local task ownership and cancellation bookkeeping
 
 Skip the shell when the state machine itself already exposes the right state stream and command surface for the feature.
+The shell owns tasks and runtime policy; executors own effect interpretation; reducers own workflow rules.
 
 ```swift
 import Foundation
@@ -151,11 +148,11 @@ import Foundation
 @MainActor
 final class AuthStore {
     private(set) var state: AuthState = .idle
-    private let client: AuthenticationClient
+    private let startSession: StartSessionEffectExecutor
     private var runningTasks: [UUID: Task<Void, Never>] = [:]
 
-    init(client: AuthenticationClient) {
-        self.client = client
+    init(startSession: StartSessionEffectExecutor) {
+        self.startSession = startSession
     }
 
     func send(_ event: AuthEvent) {
@@ -169,14 +166,50 @@ final class AuthStore {
 
     private func handle(_ effect: AuthEffect) {
         let id = UUID()
-        runningTasks[id] = Task { [client] in
-            let nextEvent = await AuthEffects.run(effect, client: client)
+        runningTasks[id] = Task { [startSession] in
+            let nextEvent: AuthEvent?
+
+            switch effect {
+            case .startSession(let credentials):
+                nextEvent = await startSession(credentials)
+            }
+
             await MainActor.run {
                 self.runningTasks[id] = nil
                 if let nextEvent {
                     self.send(nextEvent)
                 }
             }
+        }
+    }
+}
+```
+
+### Tracked observation vs one-shot executors
+
+Use distinct executors when a workflow's runtime shape differs.
+
+```swift
+import Foundation
+
+struct ObserveSessionEffectExecutor: Sendable {
+    let observe: @Sendable () -> AsyncStream<AuthEvent>
+
+    @concurrent
+    func callAsFunction() async -> AsyncStream<AuthEvent> {
+        observe()
+    }
+}
+
+struct RefreshSessionEffectExecutor: Sendable {
+    let refresh: @Sendable () async throws -> Session
+
+    @concurrent
+    func callAsFunction() async -> AuthEvent? {
+        do {
+            return .sessionWasStarted(try await refresh())
+        } catch {
+            return .sessionStartDidFail(message: String(describing: error))
         }
     }
 }
