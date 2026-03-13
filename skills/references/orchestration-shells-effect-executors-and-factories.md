@@ -1,8 +1,9 @@
 # Orchestration Shells, Effect Executors, and Factories
 
 Use this split when a feature has pure workflow logic plus async observation, commands, or timers.
+The running example is `EnergyConsumption`.
 
-## Default feature layering
+## Default layering
 
 1. Domain values
 2. Pure reducer or state machine
@@ -18,7 +19,7 @@ The goal is simple:
 - factories assemble
 - source-of-truth boundaries own authoritative data
 
-## Orchestration shell or store
+## Store responsibilities
 
 The store is a thin runtime shell around pure transition logic.
 
@@ -29,7 +30,6 @@ It should:
 - start and cancel tracked tasks
 - forward executor outputs back into the workflow as events
 - keep lifecycle and cancellation policy explicit
-- stay concise
 
 It should not:
 
@@ -37,79 +37,59 @@ It should not:
 - create peer stores implicitly
 - assemble infrastructure
 - hide business rules inside task bodies
-- interpret raw capability results inline when a named executor would keep the shell simple
 
-## Effect executors
+## Executor responsibilities
 
 An effect executor interprets one workflow only.
 
+| Workflow kind | Shape |
+|---|---|
+| Observation | `async -> AsyncStream<Event>` |
+| One-shot workflow | `async -> Event?` |
+| Fire-and-forget command | `async -> Void` |
+
 Default rules:
 
-- use one executor per workflow or observation
-- prefer a concrete `Sendable` struct, not a protocol
-- expose `callAsFunction`
-- depend on narrow closures or capability structs
-- translate raw capability results into feature events or fire-and-forget completion
-- add `@concurrent` only when the executor must intentionally leave caller isolation
+- one executor per workflow or use case
+- concrete `Sendable` struct
+- `callAsFunction`
+- narrow closures or capability structs
+- `@concurrent` only when leaving caller isolation is intentional
 
-Default shapes:
+## Factory responsibilities
 
-| Workflow kind | Default shape |
-|---|---|
-| Observation | `func callAsFunction(...) async -> AsyncStream<Event>` |
-| One-shot effect that feeds the reducer | `func callAsFunction(...) async -> Event?` |
-| Fire-and-forget command | `func callAsFunction(...) async -> Void` |
+Factories are the composition boundary.
 
-Example:
+- bind immutable context such as identifiers or route parameters
+- build executors from repositories, clients, runtimes, and clocks
+- return the assembled feature-state manager
+- own live, preview, and test wiring
+
+## Canonical runtime skeleton
+
+Using the canonical `EnergyConsumption` types:
 
 ```swift
-import Foundation
+@MainActor
+final class EnergyConsumptionStore {
+    private let observeEnergyConsumption: ObserveEnergyConsumptionEffectExecutor
+    private let refreshEnergyConsumption: RefreshEnergyConsumptionEffectExecutor
+    private var observationTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
 
-struct ObserveDevicesEffectExecutor: Sendable {
-    let observe: @Sendable () -> AsyncStream<DevicesEvent>
-
-    @concurrent
-    func callAsFunction() async -> AsyncStream<DevicesEvent> {
-        observe()
-    }
+    func send(_ event: EnergyConsumptionEvent) { /* reducer entrypoint */ }
+    private func handle(_ effect: EnergyConsumptionEffect) { /* runtime dispatch */ }
 }
 
-struct RefreshDevicesEffectExecutor: Sendable {
-    let refresh: @Sendable () async throws -> [Device]
+struct EnergyConsumptionStoreFactory: Sendable {
+    let deviceRepository: DeviceRepository
 
-    @concurrent
-    func callAsFunction() async -> DevicesEvent? {
-        do {
-            let devices = try await refresh()
-            return .devicesWereRefreshed(devices)
-        } catch {
-            return .refreshDidFail(message: String(describing: error))
-        }
-    }
-}
-
-struct ToggleFavoriteEffectExecutor: Sendable {
-    let toggleFavorite: @Sendable () async -> Void
-
-    @concurrent
-    func callAsFunction() async {
-        await toggleFavorite()
-    }
+    @MainActor
+    func make(identifier: DeviceIdentifier) -> EnergyConsumptionStore { /* bind and assemble */ }
 }
 ```
 
-## Factories
-
-Factories are the composition boundary for a feature.
-
-They should:
-
-- bind immutable context such as identifiers or feature parameters
-- build effect executors from repositories, clients, runtimes, and clocks
-- construct and return the assembled store
-- own live, preview, and test wiring
-
-They should prefer returning ready-to-use feature-state managers over intermediate dependency bags when that keeps the boundary clearer.
+The full runtime wiring lives in `canonical-feature-energy-consumption.md`.
 
 ## Ownership rules
 
@@ -119,19 +99,18 @@ They should prefer returning ready-to-use feature-state managers over intermedia
 | Task-slot and cancellation policy | Orchestration shell or store |
 | Effect interpretation | Effect executor |
 | Concrete assembly and immutable context binding | Factory |
-| Authoritative persistence, merge rules, and coherence | Source-of-truth boundary |
-
-## Smells
-
-- a store initializer that takes a large `Dependencies` bag
-- one executor that wraps multiple unrelated workflows
-- a factory that returns a dependency bag instead of an assembled feature
-- a reducer that encodes cancellation or runtime policy
-- a store that mixes state transitions, wiring, and infrastructure logic
+| Authoritative persistence and coherence | Source-of-truth boundary |
 
 ## Testing split
 
 - reducer tests prove workflow transitions
-- executor tests prove workflow-to-event or workflow-to-result mapping
-- store tests prove task ownership, cancellation, and event forwarding
-- factory tests stay light and only verify wiring that is otherwise easy to break
+- executor tests prove workflow-to-event mapping
+- store tests prove task ownership and event forwarding
+- factory tests stay light and verify wiring that is easy to break
+
+## Smells
+
+- a store initializer that takes a large `Dependencies` bag
+- one executor wrapping multiple unrelated workflows
+- a factory returning a dependency bag instead of an assembled feature
+- a reducer encoding runtime policy

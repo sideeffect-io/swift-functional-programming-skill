@@ -1,18 +1,17 @@
 # Domain Modeling
 
 Model the problem first. Architecture quality is downstream from type quality.
+The running example is `EnergyConsumption`.
 
-## Use value types by default
+## Defaults
 
 - `struct` for product types
 - `enum` for alternatives, workflows, and constrained modes
-- Explicit value objects for values with invariants
+- explicit value objects for values with invariants
 
 ## Encode invariants in types
 
 ```swift
-import Foundation
-
 struct Percentage: Sendable, Equatable {
     let value: Int
 
@@ -23,120 +22,40 @@ struct Percentage: Sendable, Equatable {
 }
 ```
 
-Prefer rejecting invalid values at the edge over letting invalid states leak inward.
+Reject invalid values at the edge instead of patching them later.
 
 ## Prefer workflow states over boolean piles
 
-```swift
-import Foundation
+Using the canonical `EnergyConsumptionState` from `state-machines.md`:
 
-struct Session: Sendable, Equatable {
-    let token: String
-}
+- `idle`
+- `awaitingFirstSample`
+- `showing(EnergyConsumptionDescriptor)`
+- `refreshing(EnergyConsumptionDescriptor?)`
+- `unavailable`
 
-enum LoginState: Sendable, Equatable {
-    case idle
-    case submitting(username: String)
-    case authenticated(Session)
-    case failed(message: String)
-}
-```
+This is clearer than `hasStarted`, `isLoading`, `isRefreshing`, `descriptor`, and `isUnavailable`.
+The `refreshing(EnergyConsumptionDescriptor?)` state also makes “last known value plus in-flight work” explicit without parallel booleans.
 
-This is clearer than a struct with `isLoading`, `isAuthenticated`, and `errorMessage` that can drift into impossible combinations.
+## Separate authoritative and derived state
 
-## Separate authoritative state from derived state
+In the canonical feature:
 
-```swift
-import Foundation
+- `Device` is authoritative
+- `EnergyConsumptionDescriptor` is derived
+- `EnergyConsumptionProjection` performs the derivation
 
-struct DeviceRecord: Sendable, Equatable {
-    let isOn: Bool
-    let level: Int
-}
-
-struct DevicePresentation: Sendable, Equatable {
-    let isOn: Bool
-    let normalizedLevel: Double
-}
-
-enum DeviceProjection {
-    static func make(from record: DeviceRecord) -> DevicePresentation {
-        DevicePresentation(
-            isOn: record.isOn,
-            normalizedLevel: Double(record.level) / 100
-        )
-    }
-}
-```
-
-The record is authoritative. The projection is derived. Do not persist or hand-edit the derived value as if it were a second source of truth.
-
-## Domain errors should be finite and explicit
-
-Prefer:
-
-```swift
-import Foundation
-
-enum ConnectionFailure: Error, Sendable, Equatable {
-    case invalidCredentials
-    case endpointUnavailable
-    case unexpectedResponse
-}
-```
-
-Over:
-
-- Raw strings
-- Opaque error codes flowing through every layer unchanged
-
-## Concrete-state modeling is also valid
-
-For larger workflows, you may prefer one type per state plus a projected aggregate:
-
-```swift
-import Foundation
-
-struct SyncProjection: Sendable, Equatable {
-    let isRunning: Bool
-    let errorMessage: String?
-}
-
-struct SyncIsIdle: Sendable, Equatable {
-    var superstate: SyncProjection {
-        SyncProjection(isRunning: false, errorMessage: nil)
-    }
-}
-
-struct SyncIsRunning: Sendable, Equatable {
-    let startedAt: Date
-
-    var superstate: SyncProjection {
-        SyncProjection(isRunning: true, errorMessage: nil)
-    }
-}
-
-struct SyncHasFailed: Sendable, Equatable {
-    let message: String
-
-    var superstate: SyncProjection {
-        SyncProjection(isRunning: false, errorMessage: message)
-    }
-}
-```
-
-Choose this style when each state carries distinct data and you want a projected aggregate without a giant switch at every call site.
+Do not persist or hand-edit derived values as if they were a second source of truth.
 
 ## Naming rules
 
-- Use nouns for domain values.
-- Use past-tense events for observed facts.
-- Use imperative names for commands only at effect boundaries.
-- Keep workflow state names explicit enough that illegal combinations are obvious.
+- nouns for domain values
+- past-tense for observed facts
+- imperative names only at effect boundaries
+- workflow state names explicit enough that illegal combinations are obvious
 
 ## Smells
 
-- Multiple optionals whose presence depends on a hidden mode
-- A "kind" field plus many unrelated stored properties
-- Domain values that know transport, storage, or framework details
-- Source-of-truth boundaries or feature-state managers patching invalid domain values after the fact
+- multiple optionals whose presence depends on a hidden mode
+- a “kind” field plus many unrelated stored properties
+- domain values that know transport, storage, or framework details

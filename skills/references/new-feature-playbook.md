@@ -1,150 +1,44 @@
 # New Feature Playbook
 
 Use this playbook when the task is to build a feature as a whole rather than only refine one layer.
+The running example is `EnergyConsumption`.
 
-## 1. Define the feature boundary
+## Shared example
 
-State in one paragraph:
+- source of truth: `DeviceRepository.observeByID(identifier)` and `refreshByID(identifier)`
+- pure projection: `EnergyConsumptionProjection.descriptor(from:)`
+- state machine: `EnergyConsumptionStateMachine.reduce`
+- effect executors: `ObserveEnergyConsumptionEffectExecutor`, `RefreshEnergyConsumptionEffectExecutor`
+- store: `EnergyConsumptionStore`
+- composition boundary: `EnergyConsumptionStoreFactory`
+- view: `EnergyConsumptionView`
 
-- what the feature owns
-- what it observes
-- what it can command
-- what must remain outside the feature
+## Build order
 
-If the boundary is unclear, the implementation will drift.
+1. Define the feature boundary: what it owns, observes, commands, and excludes.
+2. Model the domain: entities, identifiers, workflow states, events, and domain errors.
+3. Choose the source of truth: what is authoritative, what is derived, what transient state is allowed.
+4. Write the pure core first: reducer or state machine, merge rules, policies.
+5. List effects as data and choose executor shapes: `AsyncStream<Event>`, `Event?`, or `Void`.
+6. Decide whether the feature needs a thin store for lifecycle hooks, task slots, or ergonomic intents.
+7. Add dependency injection and composition: closures first, capability structs second, protocols only at real outer boundaries.
+8. Add tests by layer.
 
-## 2. Start from the domain
+## Shape heuristics
 
-Model first:
-
-- entities and value objects
-- identifiers
-- workflow states
-- events as observed facts
-- domain errors
-
-Prefer `struct` and `enum`. Eliminate illegal states before thinking about views or task wiring.
-
-## 3. Choose the source of truth
-
-Decide explicitly:
-
-- what state is authoritative
-- what state is derived
-- what transient optimistic or pending state is allowed
-
-Authoritative state usually belongs in a source-of-truth boundary or another explicit domain boundary. Transient local state belongs in the feature-state layer.
-
-## 4. Choose the feature-state shape
-
-The feature-state layer is a role, not a mandatory type.
-
-### Use a direct state machine or state stream when
-
-- the workflow is the feature
-- the public state stream already matches the consumer needs
-- adding a shell would mostly forward events and states unchanged
-
-### Use a store over a reducer or state machine when
+Use a store over a reducer or state machine when:
 
 - the consumer needs a simpler intent API
 - the feature needs lifecycle hooks or task ownership
-- you need local pending state, derived state, or effect bookkeeping around the workflow
-- the shell can stay thin and act as an orchestration runtime over a reducer plus named effect executors
+- the shell can stay thin and act as runtime over named effect executors
 
-### Use a thin coordinator shell when
+Use a direct state machine or state stream when:
 
-- the feature mostly routes between child flows
-- the shell adds orchestration value without becoming a god object
+- the workflow is the feature
+- the public state stream already matches the consumer needs
+- a shell would only forward events and states unchanged
 
-## 5. Define transitions before effects
-
-Write the pure core first:
-
-- reducer or state machine transition
-- merge and normalization rules
-- policies and classifiers
-
-Only after that, define the effect values the core can emit.
-
-Prefer:
-
-```swift
-(State, Event) -> Transition<State, Effect>
-```
-
-Over reducers or handlers that call infrastructure directly.
-
-## 6. Define effects as data
-
-List the effect cases explicitly.
-
-For each effect, decide:
-
-- which capability it needs
-- whether it should inherit caller isolation or run with `@concurrent`
-- which event or result it feeds back into the feature
-- whether its executor shape is `AsyncStream<Event>`, `Event?`, or `Void`
-
-Keep lifecycle and cancellation policy visible in the workflow model, not hidden inside helpers.
-
-## 7. Define source-of-truth boundaries
-
-Ask:
-
-- does the feature need authoritative persistence?
-- does it merge multiple sources?
-- does it own cross-aggregate coherence?
-
-If yes, put that logic in a source-of-truth boundary, not in factories or in ad hoc task closures.
-
-## 8. Define dependency injection and composition
-
-At the feature boundary:
-
-- closures first
-- capability structs second
-- protocols only for real outer-boundary needs
-
-At the app boundary:
-
-- factories assemble concrete dependencies
-- factories connect features together
-- factories do not hide business rules that belong in the reducer, state machine, or source-of-truth boundary
-
-## 9. Pick the delivery path
-
-### Simple feature path
-
-Use this path when the feature is mostly projection and a few commands.
-
-1. Model domain values
-2. Define authoritative source-of-truth reads and writes
-3. Add a minimal reducer or thin state manager
-4. Add one named effect executor per command or observation workflow if effects are needed
-5. Add targeted tests for pure logic and command mapping
-
-### Workflow-heavy feature path
-
-Use this path when retries, cancellation, parallel flows, or long-lived async behavior matter.
-
-1. Model states, events, and effects explicitly
-2. Write the pure state machine first
-3. Add one named effect executor per emitted workflow
-4. Add an optional thin shell only if consumer ergonomics or lifecycle require it
-5. Test transitions, effect interpreters, and composition seams separately
-
-## 10. Test by layer
-
-- Domain: invariants and parsing
-- Pure logic: transitions, merge rules, projections
-- Effect executors: `effect -> event/result` with fake capabilities
-- Source-of-truth boundaries: authoritative-state rules and reconciliation
-- Composition: light smoke tests only when wiring is non-trivial
-
-Do not rely on full integration tests to validate logic that could be pure.
-
-## 11. Final checklist
+## Final checklist
 
 - Is the source of truth explicit?
 - Is the feature-state shape justified?
@@ -153,7 +47,4 @@ Do not rely on full integration tests to validate logic that could be pure.
 - Are side effects represented explicitly?
 - Are dependency seams narrow and `Sendable` where appropriate?
 - Are factories wiring only, not deciding business behavior?
-- Are source-of-truth boundaries owning persistence and cross-source coherence where needed?
 - Are tests aligned with the layer responsibilities?
-
-If any answer is unclear, the feature is not fully designed yet.

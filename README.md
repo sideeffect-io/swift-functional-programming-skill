@@ -14,6 +14,7 @@ The skill is now focused on Swift 6.2+ architecture:
 - testability
 
 It also includes guidance for thin stores as orchestration shells, per-workflow effect executors, and store factories that bind immutable context.
+The core references now share a canonical `EnergyConsumption` vertical slice so the same feature can be followed from source of truth to view, including both a stream observation executor and a one-shot refresh executor.
 
 ## Layout
 
@@ -25,6 +26,7 @@ It also includes guidance for thin stores as orchestration shells, per-workflow 
 
 - `layers-and-boundaries.md`
 - `new-feature-playbook.md`
+- `canonical-feature-energy-consumption.md`
 - `state-management-source-of-truth-factory-boundaries.md`
 - `orchestration-shells-effect-executors-and-factories.md`
 - `solid-in-functional-swift.md`

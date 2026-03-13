@@ -7,16 +7,7 @@ description: Functional architecture guidance for Swift 6.2+ with strict concurr
 
 Use this skill for Swift architecture work where correctness, decoupling, and testability matter more than framework ceremony.
 
-## When to use
-
-- Domain modeling and workflow design
-- Reducers, state machines, and orchestration layers
-- Layering, boundaries, and dependency direction
-- Dependency injection and composition roots
-- Strict concurrency architecture in Swift 6.2+
-- Refactors that should improve testability without adding abstraction noise
-
-## North star
+## Core model
 
 Partition the codebase into five concerns:
 
@@ -24,106 +15,62 @@ Partition the codebase into five concerns:
 2. Pure decision logic
 3. Application orchestration and feature-state management
 4. Composition boundary
-5. Infrastructure
+5. Infrastructure and source-of-truth boundaries
 
-Keep the first two fully deterministic. Push side effects, storage, networking, timers, and hardware access to the last two.
+Keep the first two deterministic. Push IO, timers, persistence, networking, and hardware access to the last two.
 
-## Functional orientation
-
-This is a functional-programming-oriented architecture skill, not a generic layered-architecture guide.
-
-- Prefer immutable values, algebraic data types, exhaustive pattern matching, and pure transformations.
-- Keep decision logic referentially transparent whenever possible.
-- Describe effects as data and interpret them at the boundary.
-- Borrow heavily from pure-functional architecture style, while staying idiomatic in Swift's type system and concurrency model.
-
-## Layer and communication rules
+## Non-negotiables
 
 - Domain types are immutable `struct` and `enum` values by default.
-- Pure decision logic is synchronous whenever possible and returns data, not side effects.
-- Reducers remain pure: `(State, Event) -> Transition<State, Effect>`.
-- Feature-state management is a role, not a mandatory type. It may be a store, a directly consumed state machine, or another thin orchestration shell.
-- If you use stores, keep them thin orchestration shells. They own runtime state, task slots, lifecycle hooks, and event forwarding, but not large dependency bags or infrastructure assembly.
-- Prefer one named `EffectExecutor` per workflow. Executors interpret emitted effects and map capability results into `AsyncStream<Event>`, `Event?`, or `Void`.
-- Source-of-truth boundaries own authoritative state and cross-aggregate orchestration when a source of truth must stay coherent.
-- Factories and bootstrap code own wiring. They bind immutable feature context, assemble executors, and return ready-to-use feature-state managers.
-- Inward layers depend on capabilities, not concrete implementations.
-- Prefer composition over inheritance. Inheritance is a framework constraint, not an architecture default.
+- Reducers and state machines stay pure: `(State, Event) -> Transition<State, Effect>`.
+- Feature-state management is a role. If you use a store, keep it a thin orchestration shell.
+- Use one named `EffectExecutor` per workflow or use case.
+- Executors interpret effects and map capability results into `AsyncStream<Event>`, `Event?`, or `Void`.
+- Factories bind immutable feature context, assemble executors, and return ready-to-use feature-state managers.
+- Source-of-truth boundaries own authoritative state, merge rules, and cross-source coherence.
+- Use `@concurrent` only when leaving caller isolation is intentional.
 
-## Strict concurrency defaults
+## Canonical example
 
-- Assume Swift 6.2+ with strict concurrency in mind.
-- Mark boundary values and dependency closures `Sendable` when that is semantically correct.
-- Use `@concurrent` sparingly, only for effect executors that must intentionally leave caller isolation and run concurrently with the caller.
-- If an async helper should stay on the caller's actor, rely on `NonisolatedNonsendingByDefault` when enabled; otherwise spell `nonisolated(nonsending)` explicitly in reusable examples.
-- Prefer pure or `nonisolated` helpers over actor-isolated helpers when no isolated mutable state is needed.
-- Use actors for true serialization boundaries only: shared mutable caches, authoritative source-of-truth boundaries, or coordination points with identity and lifecycle.
+The shared teaching example is `EnergyConsumption`, intentionally modeled as a teaching-first Mealy machine with both:
 
-## Decision table
+- a stream observation executor
+- a one-shot refresh executor
 
-| Need | Default choice |
+Authoritative split:
+
+- `references/state-machines.md`
+  - `Transition`, `EnergyConsumptionState`, `EnergyConsumptionEvent`, `EnergyConsumptionEffect`, exhaustive reducer, transition matrix
+- `references/canonical-feature-energy-consumption.md`
+  - source of truth, projection, executors, store runtime, factory, view, testing split
+
+## Read by task
+
+| Task | Read |
 |---|---|
-| Pure business rule | Free or namespaced pure function |
-| Pure state transition | Reducer or state machine transition |
-| One async effect that must intentionally run off the caller actor | Named `@concurrent` `EffectExecutor` returning a stream, event, or result |
-| A few dependencies | Individual closure parameters |
-| A related group of dependencies | `Sendable` capability struct |
-| Runtime polymorphism or external integration seam | Protocol at the outer boundary |
-| Shared mutable state | Actor or source-of-truth boundary, not a default worker actor |
+| Design a new feature end to end | `layers-and-boundaries.md` -> `canonical-feature-energy-consumption.md` -> `new-feature-playbook.md` -> `dependency-injection.md` -> `state-machines.md` -> `testability.md` |
+| Refactor a cluttered store | `canonical-feature-energy-consumption.md` -> `orchestration-shells-effect-executors-and-factories.md` -> `state-management-source-of-truth-factory-boundaries.md` -> `dependency-injection.md` |
+| Decide ownership between reducer, store, executor, factory, and source of truth | `state-management-source-of-truth-factory-boundaries.md` -> `orchestration-shells-effect-executors-and-factories.md` -> `layers-and-boundaries.md` |
+| Decide concurrency semantics | `strict-concurrency-boundaries.md` -> `canonical-feature-energy-consumption.md` |
 
 ## Anti-patterns
 
-- Side effects in reducers or domain value initializers
-- Hidden feature-state managers created inside other feature-state managers
-- Parallel APIs for the "fast path" and the "real path" instead of modeling both inside one orchestrator
-- Effect builders that hide lifecycle or cancellation policy outside the workflow model
-- Protocol per concrete type when a closure or capability struct would do
-- An actor per feature by default
-- Source-of-truth boundaries that leak raw infrastructure details upward
-- Multiple booleans that describe mutually exclusive workflow states
+- Side effects in reducers or domain initializers
 - Stores that mix state transitions, wiring, and infrastructure logic
+- A large raw `Dependencies` bag as the default feature API
+- One executor wrapping multiple unrelated workflows
+- Source-of-truth boundaries leaking raw infrastructure payloads upward
+- Multiple booleans describing mutually exclusive workflow states
 
-## Reference map
+## Optional references
 
-Load only the files needed for the task.
+Load only when needed:
 
-- `references/layers-and-boundaries.md`
-  - Start here for the architecture map and dependency direction rules.
-- `references/new-feature-playbook.md`
-  - Read when implementing a feature end-to-end and you need a whole-feature workflow, not just isolated architecture rules.
-- `references/state-management-source-of-truth-factory-boundaries.md`
-  - Read when responsibilities are drifting between feature-state management, source-of-truth ownership, and composition.
-- `references/orchestration-shells-effect-executors-and-factories.md`
-  - Read when deciding what belongs in a reducer, store, effect executor, factory, or source-of-truth boundary.
-- `references/solid-in-functional-swift.md`
-  - Read when discussing SOLID, composition over inheritance, and abstraction quality.
-- `references/domain-modeling.md`
-  - Read for immutable modeling, ADTs, invariants, derived state, and source-of-truth rules.
-- `references/dependency-injection.md`
-  - Read for closures-first DI, capability structs, protocol boundaries, and composition-root assembly.
-- `references/strict-concurrency-boundaries.md`
-  - Read for `Sendable`, `@concurrent`, `nonisolated`, and Swift 6.2 execution semantics.
-- `references/state-machines.md`
-  - Read for reducer-driven workflows, effect execution, lifecycle modeling, and parent-child coordination.
-- `references/testability.md`
-  - Read for testing seams by layer and how strict concurrency affects test design.
-- For broader FP grounding that still applies directly to Swift architecture:
-- `references/algebraic-data-types-and-totality.md`
-  - Optional. Read for product and sum types, illegal-state elimination, exhaustive matching, and total-function thinking.
-- `references/function-composition.md`
-  - Optional. Read for higher-order functions, composition, partial application, and when to extract pure helpers.
-- `references/effects-as-data.md`
-  - Optional. Read for describing side effects as values plus interpreters at the boundary.
-- `references/validation-and-error-modeling.md`
-  - Optional. Read for `Optional` and `Result` pipelines, fail-fast validation, and domain errors.
-- `references/functional-operators.md`
-  - Optional. Read for lightweight operator guidance in pure transformations.
-- `references/optics.md`
-  - Optional. Read when immutable nested updates are getting noisy.
-
-## Practical heuristics
-
-- Prefer enums as namespaces for related pure functions when a type carries no state.
-- Keep functions small enough that their contract is obvious without scrolling.
-- Keep files cohesive; split by responsibility rather than by arbitrary suffixes.
-- If a unit is hard to test, the design probably mixes boundaries that should be separate.
+- `domain-modeling.md`
+- `effects-as-data.md`
+- `algebraic-data-types-and-totality.md`
+- `function-composition.md`
+- `validation-and-error-modeling.md`
+- `functional-operators.md`
+- `optics.md`
+- `solid-in-functional-swift.md`
